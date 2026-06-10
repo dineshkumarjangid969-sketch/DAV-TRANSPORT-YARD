@@ -944,10 +944,13 @@ function extractProducts(body, rawTables, rawMarkdown, doclingLineItems, subject
 
   function isStoreName(text) {
     const clean = (text || "").toLowerCase().trim().replace(/^(the|harvey norman|hn)\s+/i, "");
-    const storeNames = ["wairau", "albany", "westgate", "lower hutt", "palmerston", "hamilton", "whanganui",
-      "whakatane", "whangarei", "hastings", "mt wellington", "manukau", "porirua", "new plymouth",
-      "tauranga", "rotorua", "timaru", "nelson", "christchurch", "dunedin", "invercargill",
-      "napier", "gisborne", "botany", "moorhouse", "pukekohe", "henderson", "wairau park", "palmerston north", "mt maunganui", "mount maunganui"];
+    const storeNames = [];
+    for (const [name, data] of Object.entries(STORE_REGISTRY)) {
+      storeNames.push(name.toLowerCase());
+      if (data.aliases) {
+        data.aliases.forEach(a => storeNames.push(a.toLowerCase()));
+      }
+    }
     
     return storeNames.some(s => {
       return clean === s || 
@@ -1183,7 +1186,42 @@ function extractProducts(body, rawTables, rawMarkdown, doclingLineItems, subject
   // SKU QTY DESCRIPTION or DESCRIPTION QTY
   for (let i = 0; i < allLines.length; i++) {
     const line = allLines[i].trim();
-    
+    if (!line) continue;
+
+    // Skip common headers and BT Route lines (Noise Filtering - Order 225661)
+    if (/\b(?:TAX\s+INVOICE|BRANCH\s+TRANSFER|INVOICE\s+REPRINT|TRADING\s+AS)\b/i.test(line)) continue;
+    if (/\b(?:BT(?:\s*FROM)?|BRANCH\s+TRANSFER)\b/i.test(line) && (/\bTO\b/i.test(line) || line.includes("->"))) continue;
+
+    // Format 3: SKU followed by multiple Prices and then a final Quantity (Order 140375)
+    // e.g., DVH9-09W	1699.04 1699.04 254.86 1953.90	1
+    const match3 = line.match(/^([A-Z0-9\-_\.]{3,})\s+(?:[\$\d,.]+\s+){3,}(\d+)\s*$/i);
+    if (match3) {
+      addProduct(match3[1].trim(), parseInt(match3[2], 10), "");
+      continue;
+    }
+
+    // Format 4: SKU DESCRIPTION QTY N (Order 225661)
+    // e.g., KW202632LTH  WILLOW 3+2 LTH BLK QTY 1
+    const match4 = line.match(/^([A-Z0-9\-_\.]{3,})\s+(.*?)\s+QTY\s+(\d+)/i);
+    if (match4) {
+      addProduct(match4[1].trim(), parseInt(match4[3], 10), match4[2].trim());
+      continue;
+    }
+
+    // Format 2: Price/Total Details before Description (Order 124099, 716194)
+    // e.g., 268.50 268.50 0.00 268.50 THE INCREDI-BED DBL BASE
+    const match2 = line.match(/^(?:[\$\d,.]+\s+){2,}(.*?)(?:\s+Deliver|$|STOCK)/i);
+    if (match2) {
+      const desc = match2[1].trim();
+      if (desc && desc.length > 5 && !desc.toUpperCase().startsWith("GST")) {
+        let qty = 1;
+        const qty_match = line.match(/QTY\s*(\d+)/i);
+        if (qty_match) qty = parseInt(qty_match[1], 10);
+        addProduct("", qty, desc);
+        continue;
+      }
+    }
+
     // Pattern: SKU  QTY  DESCRIPTION (e.g., "ABC-123  2  Leather Sofa")
     const m1 = line.match(/^[\*\-]?\s*([A-Z0-9\-\/]{3,})\s+(\d+)\s+(.{3,})/i);
     if (m1) {
@@ -1247,15 +1285,7 @@ function extractProducts(body, rawTables, rawMarkdown, doclingLineItems, subject
     const desc = btMatch[2].trim();
     // Avoid matching store names as products
     if (desc.length >= 5 && !/^(hi|hello|dear|team|attached|please|this|asap)/i.test(desc)) {
-      const storeNames = ["wairau", "albany", "westgate", "lower hutt", "palmerston", "hamilton", "whanganui",
-        "whakatane", "whangarei", "hastings", "mt wellington", "manukau", "porirua", "new plymouth",
-        "tauranga", "rotorua", "timaru", "nelson", "christchurch", "dunedin", "invercargill",
-        "napier", "gisborne", "botany", "moorhouse", "pukekohe"];
-      const isStore = storeNames.some(s => {
-        const clean = desc.toLowerCase().trim();
-        return clean === s || clean === `${s} store` || clean === `${s} warehouse` || clean === `${s} branch`;
-      });
-      if (!isStore) {
+      if (!isStoreName(desc)) {
         addProduct("", qty, desc);
       }
     }

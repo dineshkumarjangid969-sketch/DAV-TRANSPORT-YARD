@@ -27,17 +27,51 @@ app = FastAPI(title="DAV Transport Docling Service", version="2.0.0")
 
 # Store Registry
 STORE_REGISTRY = {
-    'Wairau Park': {'lat': -36.7816, 'lon': 174.7510, 'region': 'Auckland', 'aliases': ['Wairau']},
-    'Albany': {'lat': -36.7263, 'lon': 174.6994, 'region': 'Auckland', 'aliases': []},
-    'Westgate': {'lat': -36.8183, 'lon': 174.6112, 'region': 'Auckland', 'aliases': []},
-    'Hastings': {'lat': -39.6396, 'lon': 176.8392, 'region': 'Hawkes Bay', 'aliases': []},
-    'Palmerston North': {'lat': -40.3523, 'lon': 175.6082, 'region': 'Manawatu', 'aliases': ['Palmy']},
-    'Hamilton': {'lat': -37.7870, 'lon': 175.2793, 'region': 'Waikato', 'aliases': []},
-    'Whanganui': {'lat': -39.9334, 'lon': 175.0479, 'region': 'Manawatu', 'aliases': ['Wanganui']},
-    'Whakatane': {'lat': -37.9534, 'lon': 176.9908, 'region': 'Bay of Plenty', 'aliases': []},
-    'Lower Hutt': {'lat': -41.2092, 'lon': 174.9081, 'region': 'Wellington', 'aliases': ['Hutt']},
-    'Whangarei': {'lat': -35.7251, 'lon': 174.3237, 'region': 'Northland', 'aliases': []},
-    'Pukekohe': {'lat': -37.2025, 'lon': 174.9015, 'region': 'Auckland', 'aliases': []},
+    # --- DISTRIBUTION CENTRES ---
+    'Wiri DC': {'lat': -37.0125, 'lon': 174.8624, 'region': 'Auckland', 'address': '13 Ha Crescent, Wiri, Auckland 2104', 'aliases': ['DC', 'Wiri']},
+
+    # --- AUCKLAND & NORTHLAND ---
+    'Wairau Park': {'lat': -36.7816, 'lon': 174.7510, 'region': 'Auckland', 'address': '10 Croftfield Lane, Wairau Park, Glenfield', 'aliases': ['Wairau', 'Flagship']},
+    'Westgate': {'lat': -36.8183, 'lon': 174.6112, 'region': 'Auckland', 'address': '63-65 Maki Street, Westgate', 'aliases': []},
+    'Mt Roskill': {'lat': -36.9113, 'lon': 174.7335, 'region': 'Auckland', 'address': '167-169 Stoddard Road, Mt Roskill', 'aliases': ['Mount Roskill']},
+    'Mt Wellington': {'lat': -36.9183, 'lon': 174.8488, 'region': 'Auckland', 'address': '20-54 Mount Wellington Highway, Mt Wellington', 'aliases': ['Mount Wellington', 'Sylvia Park']},
+    'Botany Downs': {'lat': -36.9298, 'lon': 174.9126, 'region': 'Auckland', 'address': '500 Ti Rakau Drive, Botany Downs', 'aliases': ['Botany']},
+    'Botany Downs Outlet': {'lat': -36.9270, 'lon': 174.9100, 'region': 'Auckland', 'address': '451 Ti Rakau Drive, Unit F, Botany Downs', 'aliases': ['Botany Outlet']},
+    'Manukau': {'lat': -36.9900, 'lon': 174.8810, 'region': 'Auckland', 'address': '8/72 Cavendish Drive, Manukau Supa Centa', 'aliases': []},
+    'Takanini Outlet': {'lat': -37.0506, 'lon': 174.9351, 'region': 'Auckland', 'address': '230 Great South Road, Takanini', 'aliases': ['Takanini']},
+    'Pukekohe': {'lat': -37.2025, 'lon': 174.9015, 'region': 'Auckland', 'address': '182-192 Manukau Road, Pukekohe', 'aliases': []},
+    'Whangarei': {'lat': -35.7423, 'lon': 174.3168, 'region': 'Northland', 'address': '5 Gumdigger Place, Raumanga, Whangarei', 'aliases': []},
+
+    # --- CENTRAL NORTH ISLAND & BAY OF PLENTY ---
+    'Hamilton': {'lat': -37.7656, 'lon': 175.2573, 'region': 'Waikato', 'address': '10-16 The Boulevard, Te Rapa, Hamilton', 'aliases': ['Te Rapa']},
+    'Hamilton Outlet': {'lat': -37.7870, 'lon': 175.2793, 'region': 'Waikato', 'address': 'Unit 1, 79 Tristram Street, Hamilton', 'aliases': []},
+    'Tauriko': {'lat': -37.7391, 'lon': 176.0963, 'region': 'Bay of Plenty', 'address': '19 Taurikura Drive, Tauriko, Tauranga', 'aliases': ['Tauranga']},
+    'Mt Maunganui': {'lat': -37.6698, 'lon': 176.2163, 'region': 'Bay of Plenty', 'address': '10 Owens Place, Mt Maunganui', 'aliases': ['Mount Maunganui']},
+    'Whakatane': {'lat': -37.9575, 'lon': 176.9744, 'region': 'Bay of Plenty', 'address': '35 State Highway 30 Unit 1, The Hub, Whakatane', 'aliases': []},
+    'Rotorua': {'lat': -38.1387, 'lon': 176.2520, 'region': 'Bay of Plenty', 'address': '35 Victoria Street, Rotorua', 'aliases': []},
+    'Gisborne': {'lat': -38.6653, 'lon': 178.0205, 'region': 'Gisborne', 'address': '51 Customhouse Street, Gisborne', 'aliases': []},
+
+    # --- LOWER NORTH ISLAND ---
+    'New Plymouth': {'lat': -39.0357, 'lon': 174.1033, 'region': 'Taranaki', 'address': '23 Smart Road, Waiwakaiho, New Plymouth', 'aliases': []},
+    'Whanganui': {'lat': -39.9298, 'lon': 175.0505, 'region': 'Manawatu-Wanganui', 'address': '287 Victoria Avenue, Whanganui', 'aliases': ['Wanganui']},
+    'Palmerston North': {'lat': -40.3551, 'lon': 175.6111, 'region': 'Manawatu-Wanganui', 'address': '361-371 Main Street West, Palmerston North', 'aliases': ['Palmy']},
+    'Hastings': {'lat': -39.6385, 'lon': 176.8447, 'region': 'Hawkes Bay', 'address': '303 Saint Aubyn Street East, Hastings', 'aliases': ['Napier']},
+    'Masterton': {'lat': -40.9525, 'lon': 175.6601, 'region': 'Wellington', 'address': '230 High Street, Masterton', 'aliases': []},
+    'Porirua': {'lat': -41.1352, 'lon': 174.8383, 'region': 'Wellington', 'address': '19 Parumoana Street, Porirua', 'aliases': []},
+    'Lower Hutt': {'lat': -41.2104, 'lon': 174.9038, 'region': 'Wellington', 'address': '28 Rutherford Street, Lower Hutt', 'aliases': ['Hutt']},
+    'Tory Street': {'lat': -41.2941, 'lon': 174.7812, 'region': 'Wellington', 'address': '77-87 Tory Street, Te Aro, Wellington', 'aliases': ['Wellington CBD', 'Te Aro']},
+
+    # --- SOUTH ISLAND ---
+    'Nelson': {'lat': -41.2750, 'lon': 173.2833, 'region': 'Tasman', 'address': '69 St Vincent Street, Nelson', 'aliases': []},
+    'Blenheim': {'lat': -41.5135, 'lon': 173.9535, 'region': 'Marlborough', 'address': '19-21 Maxwell Road, Blenheim', 'aliases': []},
+    'Christchurch': {'lat': -43.5385, 'lon': 172.6375, 'region': 'Canterbury', 'address': '250 Moorhouse Avenue, Christchurch', 'aliases': ['Moorhouse']},
+    'Hornby': {'lat': -43.5412, 'lon': 172.5186, 'region': 'Canterbury', 'address': '10-14 Chappie Place, Hornby, Christchurch', 'aliases': []},
+    'Northwood Outlet': {'lat': -43.4682, 'lon': 172.6178, 'region': 'Canterbury', 'address': '1 Radcliffe Road Unit D, Northwood, Christchurch', 'aliases': ['Northwood']},
+    'Ashburton': {'lat': -43.9015, 'lon': 171.7456, 'region': 'Canterbury', 'address': 'Cnr West Street and Moore Street, Ashburton', 'aliases': []},
+    'Timaru': {'lat': -44.3846, 'lon': 171.2505, 'region': 'Canterbury', 'address': '226 Evans Street, Timaru', 'aliases': []},
+    'Dunedin': {'lat': -45.8778, 'lon': 170.5005, 'region': 'Otago', 'address': '20 MacLaggan Street, Dunedin', 'aliases': ['Maclaggan']},
+    'Dunedin Outlet': {'lat': -45.8913, 'lon': 170.4952, 'region': 'Otago', 'address': '95 Hillside Road South, Dunedin', 'aliases': []},
+    'Invercargill': {'lat': -46.4116, 'lon': 168.3551, 'region': 'Southland', 'address': '245 Tay Street, Invercargill', 'aliases': []}
 }
 
 class ParseResult(BaseModel):
@@ -488,24 +522,11 @@ class DoclingParser:
 
             # Format 3: SKU followed by multiple Prices and then a final Quantity (Order 140375)
             # e.g., DVH9-09W	1699.04 1699.04 254.86 1953.90	1
-            match3 = re.match(r"^([A-Z0-9\-_\.]{3,})\s+(?:[\d,.]+\s+){3,}(\d+)\s*$", line)
+            match3 = re.match(r"^([A-Z0-9\-_\.]{3,})\s+(?:[\$\d,.]+\s+){3,}(\d+)\s*$", line)
             if match3:
                 sku = match3.group(1).strip()
                 qty = int(match3.group(2))
                 result["line_items"].append({"sku": sku, "quantity": qty, "description": ""})
-                continue
-
-            # Format 1: SKU QTY DESCRIPTION (Standard)
-            match1 = re.match(r"^\*?\s*([A-Z0-9\-_\.]{3,})\s+(\d+)\s+(.*)", line)
-            if match1:
-                sku = match1.group(1).strip()
-                qty = int(match1.group(2))
-                desc = match1.group(3).strip()
-                if len(desc) < 5 and i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    if not next_line.startswith("$") and not re.match(r"^\d", next_line) and len(next_line) > 3:
-                        desc = next_line
-                result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
                 continue
 
             # Format 2: Price/Total Details before Description (Order 124099, 716194)
@@ -520,6 +541,29 @@ class DoclingParser:
                     if qty_match:
                         qty = int(qty_match.group(1))
                     result["line_items"].append({"sku": "", "quantity": qty, "description": desc})
+                continue
+
+            # Format 4: SKU DESCRIPTION QTY N (Order 225661)
+            # e.g., KW202632LTH  WILLOW 3+2 LTH BLK QTY 1
+            match4 = re.match(r"^([A-Z0-9\-_\.]{3,})\s+(.*?)\s+QTY\s+(\d+)", line, re.IGNORECASE)
+            if match4:
+                sku = match4.group(1).strip()
+                desc = match4.group(2).strip()
+                qty = int(match4.group(3))
+                result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
+                continue
+
+            # Format 1: SKU QTY DESCRIPTION (Standard)
+            match1 = re.match(r"^\*?\s*([A-Z0-9\-_\.]{3,})\s+(\d+)\s+(.*)", line)
+            if match1:
+                sku = match1.group(1).strip()
+                qty = int(match1.group(2))
+                desc = match1.group(3).strip()
+                if len(desc) < 5 and i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    if not next_line.startswith("$") and not re.match(r"^\d", next_line) and len(next_line) > 3:
+                        desc = next_line
+                result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
                 continue
 
     def _set_coordinates(self, result: Dict):
