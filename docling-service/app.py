@@ -37,6 +37,7 @@ STORE_REGISTRY = {
     'Whakatane': {'lat': -37.9534, 'lon': 176.9908, 'region': 'Bay of Plenty', 'aliases': []},
     'Lower Hutt': {'lat': -41.2092, 'lon': 174.9081, 'region': 'Wellington', 'aliases': ['Hutt']},
     'Whangarei': {'lat': -35.7251, 'lon': 174.3237, 'region': 'Northland', 'aliases': []},
+    'Pukekohe': {'lat': -37.2025, 'lon': 174.9015, 'region': 'Auckland', 'aliases': []},
 }
 
 class ParseResult(BaseModel):
@@ -195,7 +196,20 @@ class DoclingParser:
                 result["invoice_number"] = match.group(1).strip()
                 break
 
-        # Customer name extraction disabled as per user request
+        # Customer name extraction (specific for delivery for customer)
+        # For order 716194, "customer name is mentioned above the address"
+        # We search for the address first, then take the line above it.
+        # This is a heuristic that works for many Harvey Norman delivery dockets.
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            # Address often starts with a number or contains common street types
+            if re.search(r"^\d+\s+[A-Za-z]+|Road|Street|Avenue|Drive|Way|Lane|Crescent", line, re.IGNORECASE):
+                if i > 0:
+                    potential_name = lines[i-1].strip()
+                    # Basic noise filter for the potential name
+                    if potential_name and len(potential_name) > 3 and not any(x in potential_name.upper() for x in ["TAX INVOICE", "INVOICE", "TRADING AS", "ORDER", "PHONE", "DATE"]):
+                        result["customer_name"] = potential_name
+                        break
 
         order_patterns = [
             r"(?:Order|SO|Sales Order)[:\s#-]*([A-Z0-9\-]+)",
@@ -469,7 +483,7 @@ class DoclingParser:
             # Skip common headers and BT Route lines
             if any(x in line.upper() for x in ["TAX INVOICE", "BRANCH TRANSFER", "INVOICE REPRINT", "TRADING AS"]):
                 continue
-            if re.search(r"BT\s+from\s+.*?\s+to\s+", line, re.IGNORECASE):
+            if re.search(r"\b(?:BT(?:\s*FROM)?|BRANCH\s+TRANSFER)\b", line, re.IGNORECASE) and (" TO " in line.upper() or "->" in line):
                 continue
 
             # Format 3: SKU followed by multiple Prices and then a final Quantity (Order 140375)
