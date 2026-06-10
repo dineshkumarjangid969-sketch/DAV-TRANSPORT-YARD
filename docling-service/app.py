@@ -220,15 +220,20 @@ class DoclingParser:
 
     def _parse_tax_invoice(self, text: str, tables, result: Dict):
         inv_patterns = [
-            r"INVOICE\s+REPRINT\s+(\d{2}/\d+)",
-            r"INVOICE\s*(?:NO|NUMBER|#)?[:\s]*(\d[\d/\-]+)",
-            r"INVOICE\s*#?\s*(\d+)",
+            r"INVOICE\s+REPRINT\s+(?:\d{2}/)?(\d+)",
+            r"INVOICE\s*(?:NO|NUMBER|#)?[:\s]*(?:\d{2}/)?(\d[\d/\-]+)",
+            r"INVOICE\s*#?\s*(?:\d{2}/)?(\d+)",
         ]
         for pattern in inv_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 result["invoice_number"] = match.group(1).strip()
                 break
+
+        # Detect if it's a F2F transfer (Branch Transfer)
+        if "F2F STOCK SALES" in text.upper():
+            result["type"] = "branch_transfer"
+            result["bt_type"] = "f2f_transfer"
 
         # Customer name extraction (specific for delivery for customer)
         # For order 716194, "customer name is mentioned above the address"
@@ -257,6 +262,23 @@ class DoclingParser:
                 if len(candidate) > 2:
                     result["order_number"] = candidate
                     break
+
+        # For BTs, look for the destination store in the typical "Going to" area
+        if result["type"] == "branch_transfer":
+            # Search after GST Exempt or F2F Sales
+            search_area = re.search(r"(?:\*\*\* G\.S\.T\. EXEMPT \*\*\*|\*\*\* F2F STOCK SALES \*\*\*)\s*(.*)", text, re.DOTALL | re.IGNORECASE)
+            if search_area:
+                potential_store_text = search_area.group(1)[:500]
+                for store_name, data in STORE_REGISTRY.items():
+                    if store_name.lower() in potential_store_text.lower():
+                        result["destination_store"] = store_name
+                        result["bt_to"] = store_name
+                        break
+                    for alias in data.get("aliases", []):
+                        if alias.lower() in potential_store_text.lower():
+                            result["destination_store"] = store_name
+                            result["bt_to"] = store_name
+                            break
 
         # Address extraction disabled as per user request
 
@@ -307,6 +329,8 @@ class DoclingParser:
     def _parse_goods_movement(self, text: str, tables, result: Dict):
         result["type"] = "branch_transfer"
         result["bt_type"] = "branch_transfer"
+
+        # Store detection for Goods Movement
         bt_patterns = [
             r"(?:from|OFFSITE)[:\s]+([A-Za-z\s]+?)(?:\s+to\s+|\s*→\s*)([A-Za-z\s]+)",
             r"From\s*:\s*([A-Za-z\s]+?)\s+To\s*:\s*([A-Za-z\s]+)",
@@ -315,17 +339,38 @@ class DoclingParser:
             r"Branch\s+Transfer\s+(?:From\s+)?([A-Za-z\s]+?)\s+(?:To\s+)([A-Za-z\s]+)",
             r"Goods\s+Movement\s+(?:from\s+)?([A-Za-z\s]+?)\s+(?:to\s+)([A-Za-z\s]+)",
         ]
-        for pattern in bt_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                result["bt_from"] = self._normalize_store(match.group(1).strip())
-                result["bt_to"] = self._normalize_store(match.group(2).strip())
-                result["pickup_store"] = result["bt_from"]
-                result["destination_store"] = result["bt_to"]
-                break
-        order_match = re.search(r"(?:Order Ref|SO|ORD|Order)[:\s#]*([A-Z0-9\-]+)", text, re.IGNORECASE)
+
+        # Special case for "Coming from" and "Going to" lines
+        coming_from = re.search(r"Coming\s+from\s*[:\s]+([A-Za-z\s]+)", text, re.IGNORECASE)
+        going_to = re.search(r"Going\s+to\s*[:\s]+([A-Za-z\s]+)", text, re.IGNORECASE)
+        if coming_from:
+            result["bt_from"] = self._normalize_store(coming_from.group(1).strip())
+            result["pickup_store"] = result["bt_from"]
+        if going_to:
+            result["bt_to"] = self._normalize_store(going_to.group(1).strip())
+            result["destination_store"] = result["bt_to"]
+
+        if not result["bt_from"] or not result["bt_to"]:
+            for pattern in bt_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    if not result["bt_from"]:
+                        result["bt_from"] = self._normalize_store(match.group(1).strip())
+                        result["pickup_store"] = result["bt_from"]
+                    if not result["bt_to"] and match.lastindex >= 2:
+                        result["bt_to"] = self._normalize_store(match.group(2).strip())
+                        result["destination_store"] = result["bt_to"]
+                    break
+
+        # Order and Invoice Numbers for Goods Movement
+        order_match = re.search(r"(?:Order Ref|SO|ORD|Order|Reference)[:\s#]*([A-Z0-9\-]+)", text, re.IGNORECASE)
         if order_match:
             result["order_number"] = order_match.group(1).strip()
+
+        bt_no_match = re.search(r"Branch\s+Transfer\s+No[:\s]+(\d+)", text, re.IGNORECASE)
+        if bt_no_match:
+            result["invoice_number"] = bt_no_match.group(1).strip()
+
         if not result["line_items"]:
             self._extract_line_items_from_text(text, result)
 
@@ -454,16 +499,21 @@ class DoclingParser:
     def _extract_store_info(self, text: str, result: Dict):
         header = text[:3000]
         header_lower = header.lower()
+        found_store = None
         for store_name, data in STORE_REGISTRY.items():
             if store_name.lower() in header_lower:
-                if not result["pickup_store"]:
-                    result["pickup_store"] = store_name
+                found_store = store_name
                 break
             for alias in data.get("aliases", []):
                 if alias.lower() in header_lower:
-                    if not result["pickup_store"]:
-                        result["pickup_store"] = store_name
+                    found_store = store_name
                     break
+
+        if found_store:
+            if not result["pickup_store"]:
+                result["pickup_store"] = found_store
+            if (result.get("type") == "branch_transfer" or result.get("document_type") == "branch_transfer") and not result.get("bt_from"):
+                result["bt_from"] = found_store
 
     def _extract_phone(self, text: str, result: Dict):
         # Phone extraction disabled as per user request
@@ -553,13 +603,26 @@ class DoclingParser:
                 result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
                 continue
 
+            # Format 5: SKU DESCRIPTION QTY PRICE TOTAL (Goods Movement 1)
+            # e.g., * CI904CTB1 F&P CLASSIC INDUCTION 90CM COOKTOP 1 $2,164.00 $2,164.00
+            match5 = re.match(r"^\*?\s*([A-Z0-9\-_\.]{3,})\s+(.*?)\s+(\d+)\s+(?:\$[\d,.]+\s+){1,}[\$\d,.]+", line)
+            if match5:
+                sku = match5.group(1).strip()
+                desc = match5.group(2).strip()
+                qty = int(match5.group(3))
+                result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
+                continue
+
             # Format 1: SKU QTY DESCRIPTION (Standard)
             match1 = re.match(r"^\*?\s*([A-Z0-9\-_\.]{3,})\s+(\d+)\s+(.*)", line)
             if match1:
                 sku = match1.group(1).strip()
                 qty = int(match1.group(2))
                 desc = match1.group(3).strip()
-                if len(desc) < 5 and i + 1 < len(lines):
+                # Clean desc if it contains prices
+                desc = re.sub(r"[\$\d,.]+\s+[\$\d,.]+$", "", desc).strip()
+
+                if (not desc or len(desc) < 5 or desc.startswith("$")) and i + 1 < len(lines):
                     next_line = lines[i + 1].strip()
                     if not next_line.startswith("$") and not re.match(r"^\d", next_line) and len(next_line) > 3:
                         desc = next_line
