@@ -37,6 +37,7 @@ STORE_REGISTRY = {
     'Whakatane': {'lat': -37.9534, 'lon': 176.9908, 'region': 'Bay of Plenty', 'aliases': []},
     'Lower Hutt': {'lat': -41.2092, 'lon': 174.9081, 'region': 'Wellington', 'aliases': ['Hutt']},
     'Whangarei': {'lat': -35.7251, 'lon': 174.3237, 'region': 'Northland', 'aliases': []},
+    'Pukekohe': {'lat': -37.2025, 'lon': 174.9015, 'region': 'Auckland', 'aliases': []},
 }
 
 class ParseResult(BaseModel):
@@ -181,17 +182,7 @@ class DoclingParser:
             result["bt_to"] = result["pickup_store"]
             result["destination_store"] = result["pickup_store"]
             
-        cust_match = re.search(r"Customer\s+Name[:\s]+([A-Za-z\s]+?)(?=\s+Customer\s+Phone|\s+Please\s+Deliver|$)", text, re.IGNORECASE)
-        if cust_match:
-            result["customer_name"] = cust_match.group(1).strip()
-            
-        phone_match = re.search(r"Customer\s+Phone[:\s]+(\d+)", text, re.IGNORECASE)
-        if phone_match:
-            result["customer_phone"] = phone_match.group(1).strip()
-
-        pickup_match = re.search(r"(?:Pickup\s+From|Customer\s+Address|From)[:\s]+(.*?)(?=\s*(?:Product|Signature|Authorised|$))", text, re.IGNORECASE | re.DOTALL)
-        if pickup_match:
-            result["destination_address"] = pickup_match.group(1).strip().replace("\n", ", ")
+        # Customer details extraction disabled
 
     def _parse_tax_invoice(self, text: str, tables, result: Dict):
         inv_patterns = [
@@ -205,19 +196,20 @@ class DoclingParser:
                 result["invoice_number"] = match.group(1).strip()
                 break
 
-        cust_patterns = [
-            r"Customer\s*:\s*([A-Z][A-Za-z\s\.\-]+?)(?=\n|Phone|Address|Location|Sales|Date|Product|$)",
-            r"Sold\s+To\s*:\s*([A-Z][A-Za-z\s\.\-]+?)(?=\n|Phone|Address|$)",
-            r"(?:Name|Customer\s+Name)\s*:\s*([A-Z][A-Za-z\s\.\-]+?)(?=\n|Phone|Address|$)",
-            r"Delivery\s+To\s*:\s*([A-Z][A-Za-z\s\.\-]+?)(?=\n|Address|Phone|$)",
-        ]
-        for pattern in cust_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                if len(name) > 3 and not any(x in name.upper() for x in ["TAX INVOICE", "INVOICE REPRINT", "PRODUCT", "QTY", "SKU"]):
-                    result["customer_name"] = name
-                    break
+        # Customer name extraction (specific for delivery for customer)
+        # For order 716194, "customer name is mentioned above the address"
+        # We search for the address first, then take the line above it.
+        # This is a heuristic that works for many Harvey Norman delivery dockets.
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            # Address often starts with a number or contains common street types
+            if re.search(r"^\d+\s+[A-Za-z]+|Road|Street|Avenue|Drive|Way|Lane|Crescent", line, re.IGNORECASE):
+                if i > 0:
+                    potential_name = lines[i-1].strip()
+                    # Basic noise filter for the potential name
+                    if potential_name and len(potential_name) > 3 and not any(x in potential_name.upper() for x in ["TAX INVOICE", "INVOICE", "TRADING AS", "ORDER", "PHONE", "DATE"]):
+                        result["customer_name"] = potential_name
+                        break
 
         order_patterns = [
             r"(?:Order|SO|Sales Order)[:\s#-]*([A-Z0-9\-]+)",
@@ -232,19 +224,17 @@ class DoclingParser:
                     result["order_number"] = candidate
                     break
 
-        addr_patterns = [
-            r"Delivery\s+Address\s*:\s*(.*?)(?=\n\s*(?:Delivery Instructions|Phone|Product|Invoice|GST|Customer|Signature|SALES ORDER|----------|##? |$))",
-            r"Deliver\s+To\s*:\s*(.*?)(?=\n\s*(?:Instructions|Phone|Product|Invoice|##? |$))",
-            r"Address\s*:\s*(.*?)(?=\n\s*(?:Instructions|Phone|Product|##? |$))",
+        # Address extraction disabled as per user request
+
+        # Extract Preferred Delivery Date
+        date_patterns = [
+            r"(?:Expected Delivery date|Delivery Scheduled|Deliver Not Before)[:\s]*([^\n]+)",
         ]
-        for pattern in addr_patterns:
-            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        for pattern in date_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                addr = match.group(1).strip().replace("\n", ", ")
-                addr = re.sub(r"\s{2,}", " ", addr)
-                if len(addr) > 10 and not addr.upper().startswith("PRODUCT"):
-                    result["destination_address"] = addr
-                    break
+                result["preferred_delivery_date"] = match.group(1).strip()
+                break
 
         instr_patterns = [
             r"Delivery\s+Instructions\s*:\s*(.*?)(?=\n\s*(?:Address|Phone|Product|Invoice|GST|Signature|##? |$))",
@@ -272,15 +262,7 @@ class DoclingParser:
         supp_match = re.search(r"Supplier\s+Invoice[:\s]+(\d+)", text, re.IGNORECASE)
         if supp_match:
             result["invoice_number"] = supp_match.group(1).strip()
-        cust_match = re.search(r"Customer\s+Name[:\s]+([A-Za-z\s]+?)(?=\s+Customer\s+Phone|\s+Please\s+Deliver|$)", text, re.IGNORECASE)
-        if cust_match:
-            result["customer_name"] = cust_match.group(1).strip()
-        phone_match = re.search(r"Customer\s+Phone[:\s]+(\d+)", text, re.IGNORECASE)
-        if phone_match:
-            result["customer_phone"] = phone_match.group(1).strip()
-        deliver_match = re.search(r"Please\s+Deliver\s+To[:\s]+(.*?)(?=Authorised|$)", text, re.IGNORECASE | re.DOTALL)
-        if deliver_match:
-            result["destination_address"] = deliver_match.group(1).strip().replace("\n", ", ")
+        # Customer details extraction disabled
         store_match = re.search(r"Harvey\s+Norman\s+(?:Home\s+Furnishings\s+)?([A-Za-z\s]+?)(?=\s+\d+|$)", text, re.IGNORECASE)
         if store_match:
             result["pickup_store"] = self._normalize_store(store_match.group(1).strip())
@@ -313,6 +295,9 @@ class DoclingParser:
         if not result["line_items"]:
             self._extract_line_items_from_text(text, result)
 
+        if not result["line_items"]:
+            result["line_items"].append({"sku": "GM", "quantity": 1, "description": "Goods movement"})
+
     def _parse_bt_sales_order(self, text: str, tables: List[List[List[str]]], result: Dict):
         """Ruleset 1: Parses structured Sales Order layouts"""
         result["type"] = "branch_transfer"
@@ -330,7 +315,7 @@ class DoclingParser:
         if dest_match:
             result["bt_to"] = self._normalize_store(dest_match.group(1).strip())
             result["destination_store"] = result["bt_to"]
-            result["destination_address"] = dest_match.group(2).strip()
+            # destination_address extraction disabled
 
         # 4. Purchase Order (Last 6 digits)
         po_match = re.search(r"Purchase Order[:\s]*.*?(\d{6})\b", text, re.IGNORECASE)
@@ -374,10 +359,19 @@ class DoclingParser:
             result["bt_from"] = self._normalize_store(origin_match.group(1).strip())
             result["pickup_store"] = result["bt_from"]
 
-        # 3. Extract Invoice Number
-        invoice_match = re.search(r"Supplier Invoice:\s*(\d+)", text, re.IGNORECASE)
-        if invoice_match:
-            result["invoice_number"] = invoice_match.group(1).strip()
+        # 3. Extract Invoice Number (Ultra-Robust)
+        # First, check if a primary Customer Tax Invoice is attached in the bundle (e.g., "32/2640880")
+        customer_inv_match = re.search(r"(?:TAX\s+INVOICE|INVOICE\s+REPRINT)[\s:]*([0-9]+/[0-9]+)", text, re.IGNORECASE)
+
+        # Next, look for the Tape Contents Supplier Invoice, removing the strict colon requirement
+        supplier_inv_match = re.search(r"Supplier\s+Invoice[\s:]*([A-Za-z0-9\-]+)", text, re.IGNORECASE)
+
+        if customer_inv_match:
+            # Prioritize the main customer invoice if the PDF contains multiple merged pages
+            result["invoice_number"] = customer_inv_match.group(1).strip()
+        elif supplier_inv_match:
+            # Fallback to the internal supplier invoice (e.g., 2860269)
+            result["invoice_number"] = supplier_inv_match.group(1).strip()
 
         # 4 & 5. Products and Quantities Loop
         # Split text using case-insensitive 'Accepted'
@@ -438,23 +432,8 @@ class DoclingParser:
                     break
 
     def _extract_phone(self, text: str, result: Dict):
-        phone_patterns = [
-            r"SMS\s+Delivery\s+Updates\s+To\s+(\d[\d\s\-]{6,14})",
-            r"(?:Customer\s+)?Phone[:\s]+(\d[\d\s\-]{6,14})",
-            r"Customer\s*:\s*(\d[\d\s\-]{6,14})",
-            r"(?:Mobile|Ph|Cell|Contact)[:\s]+(\d[\d\s\-]{6,14})",
-            r"(\+?64[\s\-]?[2-9]\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d)",
-            r"(0[2-9]\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d[\s\-]?\d)",
-            r"(02[\s\-]?\d{3}[\s\-]?\d{4})",
-            r"(02[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{3})",
-        ]
-        for pattern in phone_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                phone = match.group(1).strip().replace(" ", "").replace("-", "")
-                if len(phone) >= 8 and len(phone) <= 15:
-                    result["customer_phone"] = phone
-                    break
+        # Phone extraction disabled as per user request
+        return
 
     def _extract_flags(self, text_lower: str, result: Dict):
         if "assemble" in text_lower and "customer to assemble" not in text_lower:
@@ -497,16 +476,51 @@ class DoclingParser:
     def _extract_line_items_from_text(self, text: str, result: Dict):
         lines = text.split("\n")
         for i, line in enumerate(lines):
-            match = re.match(r"^\*?\s*([A-Z0-9\-]{3,})\s+(\d+)\s+(.*)", line)
-            if match:
-                sku = match.group(1).strip()
-                qty = int(match.group(2))
-                desc = match.group(3).strip()
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip common headers and BT Route lines
+            if any(x in line.upper() for x in ["TAX INVOICE", "BRANCH TRANSFER", "INVOICE REPRINT", "TRADING AS"]):
+                continue
+            if re.search(r"\b(?:BT(?:\s*FROM)?|BRANCH\s+TRANSFER)\b", line, re.IGNORECASE) and (" TO " in line.upper() or "->" in line):
+                continue
+
+            # Format 3: SKU followed by multiple Prices and then a final Quantity (Order 140375)
+            # e.g., DVH9-09W	1699.04 1699.04 254.86 1953.90	1
+            match3 = re.match(r"^([A-Z0-9\-_\.]{3,})\s+(?:[\d,.]+\s+){3,}(\d+)\s*$", line)
+            if match3:
+                sku = match3.group(1).strip()
+                qty = int(match3.group(2))
+                result["line_items"].append({"sku": sku, "quantity": qty, "description": ""})
+                continue
+
+            # Format 1: SKU QTY DESCRIPTION (Standard)
+            match1 = re.match(r"^\*?\s*([A-Z0-9\-_\.]{3,})\s+(\d+)\s+(.*)", line)
+            if match1:
+                sku = match1.group(1).strip()
+                qty = int(match1.group(2))
+                desc = match1.group(3).strip()
                 if len(desc) < 5 and i + 1 < len(lines):
                     next_line = lines[i + 1].strip()
                     if not next_line.startswith("$") and not re.match(r"^\d", next_line) and len(next_line) > 3:
                         desc = next_line
                 result["line_items"].append({"sku": sku, "quantity": qty, "description": desc})
+                continue
+
+            # Format 2: Price/Total Details before Description (Order 124099, 716194)
+            # e.g., 268.50 268.50 0.00 268.50 THE INCREDI-BED DBL BASE
+            # Requires at least 2 price blocks to avoid matching single numbers/SKUs
+            match2 = re.match(r"^(?:[\$\d,.]+\s+){2,}(.*?)(?:\s+Deliver|$|STOCK)", line)
+            if match2:
+                desc = match2.group(1).strip()
+                if desc and len(desc) > 5 and not desc.upper().startswith("GST"):
+                    qty = 1
+                    qty_match = re.search(r"QTY\s*(\d+)", line, re.IGNORECASE)
+                    if qty_match:
+                        qty = int(qty_match.group(1))
+                    result["line_items"].append({"sku": "", "quantity": qty, "description": desc})
+                continue
 
     def _set_coordinates(self, result: Dict):
         if result["pickup_store"] in STORE_REGISTRY:
@@ -521,10 +535,10 @@ class DoclingParser:
     def _calculate_billing_and_location(self, result: Dict):
         if result["type"] == "branch_transfer" or result.get("bt_from") or result.get("bt_to"):
             result["billing_party"] = result.get("bt_to") or result.get("destination_store") or result.get("pickup_store") or "Harvey Norman"
-            result["location"] = result.get("bt_to") or result.get("destination_store") or result.get("destination_address") or result.get("pickup_store")
+            result["location"] = result.get("bt_to") or result.get("destination_store") or result.get("pickup_store")
         else:
-            result["billing_party"] = result.get("customer_name") or result.get("destination_store") or result.get("pickup_store")
-            result["location"] = result.get("destination_address") or result.get("destination_store") or result.get("pickup_store")
+            result["billing_party"] = result.get("destination_store") or result.get("pickup_store") or "Harvey Norman"
+            result["location"] = result.get("destination_store") or result.get("pickup_store")
 
     def _normalize_store(self, name: str) -> Optional[str]:
         if not name:

@@ -1235,6 +1235,11 @@ function extractProducts(body, rawTables, rawMarkdown, doclingLineItems, subject
     }
   }
   
+  // Final Strategy 8: if GM/BT but no products found, just label as Goods Movement
+  if (!products.length && /(?:GM|goods?\s*movement|BT|branch\s+transfer)/i.test((body || "") + (subject || ""))) {
+      addProduct("GM", 1, "Goods movement");
+  }
+
   // "BT for PRODUCT from Store" pattern
   const btMatch = (body || "").match(/(?:BT|branch\s+transfer)\s+(?:for\s+)?(\d+\s+)?([A-Za-z][A-Za-z0-9\s\/\-\(\)\.,']+?)(?:\s+from\s+|\s+to\s+|\s+on\s+|\s+please|\.\s|\n)/i);
   if (btMatch && !products.length) {
@@ -1245,7 +1250,7 @@ function extractProducts(body, rawTables, rawMarkdown, doclingLineItems, subject
       const storeNames = ["wairau", "albany", "westgate", "lower hutt", "palmerston", "hamilton", "whanganui",
         "whakatane", "whangarei", "hastings", "mt wellington", "manukau", "porirua", "new plymouth",
         "tauranga", "rotorua", "timaru", "nelson", "christchurch", "dunedin", "invercargill",
-        "napier", "gisborne", "botany", "moorhouse"];
+        "napier", "gisborne", "botany", "moorhouse", "pukekohe"];
       const isStore = storeNames.some(s => {
         const clean = desc.toLowerCase().trim();
         return clean === s || clean === `${s} store` || clean === `${s} warehouse` || clean === `${s} branch`;
